@@ -36,17 +36,27 @@ const productCollection = db.collection("products");
 
 
 // product api
-app.get('products' , async (req , res) => {
+// product api
+app.get('/products', async (req, res) => {
+  const query = {};
+  const {email} = req.query;
+  if(email) {
+    query.senderEmail = email;
+  }
 
+  const cursor = productCollection.find(query)
+  const result = await cursor.toArray()
+  res.send(result)
 })
 
-app.post('products' , async (req , res) => {
+app.post('/products', async (req, res) => {
   const product = req.body
   const result = await productCollection.insertOne(product)
   res.send(result)
 })
 
-    await client.db("admin").command({ ping: 1 });
+
+    await client.db("Premium_Garments").command({ ping: 1 });
     console.log("Pinged your deployment. You successfully connected to MongoDB!");
   } finally {
     // Ensures that the client will close when you finish/error
