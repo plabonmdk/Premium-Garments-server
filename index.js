@@ -9,6 +9,15 @@ const stripe = require('stripe')(process.env.STRIPE_SECRET);
 
 const crypto = require('crypto');
 
+const admin = require("firebase-admin");
+
+const serviceAccount = require("../garments order production tracker system/garments-order-firebase-adminsdk.json");
+
+admin.initializeApp({
+  credential: admin.credential.cert(serviceAccount)
+});
+
+
 function generateTrackingId(prefix = 'PROD') {
   const date = new Date().toISOString().slice(0, 10).replace(/-/g, '');
   const random = crypto.randomBytes(3).toString('hex').toUpperCase();
@@ -19,6 +28,26 @@ function generateTrackingId(prefix = 'PROD') {
 app.use(express.json());
 app.use(cors());
 
+
+const verifyFBToken = async (req , res , next) => {
+  // console.log("headers in the middleware" , req.headers.authorization)
+  const token = req.headers.authorization;
+
+  if(!token){
+    return res.status(401).send({message: 'unauthorized access'})
+  }
+  try{
+    const idToken = token.split(' ')[1]
+    const decoded = await admin.auth().verifyIdToken(idToken)
+    req.decoded_email = decoded.email
+    console.log('decoded in the token' , decoded)
+    next();
+  }
+  catch(err){
+    return res.status(404).send({message: "unauthorized access"})
+  }
+  
+}
 
 app.get('/', (req, res) => {
   res.send('Hello World!')
@@ -126,7 +155,21 @@ app.patch('/payment-success' , async(req , res) => {
   const sessionId = req.query.session_id;
 
   const session = await stripe.checkout.sessions.retrieve(sessionId)
-  console.log("session retrieve" , session)
+  // console.log("session retrieve" , session)
+
+  const transactionId = session.payment_intent;
+  const query = {transactionId: transactionId}
+
+  const paymentExist = await paymentCollection.findOne(query)
+  // console.log(paymentExist)
+
+  if(paymentExist){
+    return res.send({message: "already exists" ,
+       transactionId ,
+       trackingId: paymentExist.trackingId,
+      
+      })
+  }
 
   const trackingId = generateTrackingId();
 
@@ -151,12 +194,13 @@ app.patch('/payment-success' , async(req , res) => {
       transactionId: session.payment_intent,
       paymentStatus: session.payment_status,
       paidAt: new Date(),
+      trackingId: trackingId,
       
 
     }
     
     if(session.payment_status === 'paid'){
-      const resultPayment = await productCollection.insertOne(paymentHistory)
+      const resultPayment = await paymentCollection.insertOne(paymentHistory)
       res.send({success: true ,
          modifyParcel: result ,
          trackingId: trackingId,
@@ -168,6 +212,24 @@ app.patch('/payment-success' , async(req , res) => {
   }
 
   res.send({success: false})
+})
+
+app.get('/payments' , verifyFBToken , async(req , res) => {
+  const email = req.query.email;
+  const query = {}
+
+  
+
+
+  if(email){
+    query.customerEmail = email
+    if(email !== req.decoded_email){
+      return res.status(403).send({message: 'forbidden access'})
+    }
+  }
+  const cursor = paymentCollection.find(query)
+  const result = await cursor.toArray()
+  res.send(result)
 })
 
     await client.db("Premium_Garments").command({ ping: 1 });
