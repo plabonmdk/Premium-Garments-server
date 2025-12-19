@@ -72,7 +72,25 @@ async function run() {
     
 const db = client.db("Premium_Garments");
 const productCollection = db.collection("products");
+const userCollection = db.collection("users");
 const paymentCollection = db.collection('payments')
+const deliveryCollection = db.collection('delivery')
+
+
+// user related api
+app.post('/users', async (req, res) => {
+  const user = req.body;
+
+  // optional safety check
+  const existingUser = await userCollection.findOne({ email: user.email });
+  if (existingUser) {
+    return res.send({ message: "user already exists" });
+  }
+
+  user.createdAt = new Date();
+  const result = await userCollection.insertOne(user);
+  res.send(result);
+});
 
 
 // product api
@@ -227,8 +245,30 @@ app.get('/payments' , verifyFBToken , async(req , res) => {
       return res.status(403).send({message: 'forbidden access'})
     }
   }
-  const cursor = paymentCollection.find(query)
+  const cursor = paymentCollection.find(query).sort({paidAt: -1})
   const result = await cursor.toArray()
+  res.send(result)
+})
+
+
+// delivery related api 
+
+app.get('/delivery' , async (req , res) => {
+  const query = { }
+  if(req.query.status){
+    query.status = req.query.status
+  }
+  const cursor = deliveryCollection.find(query)
+  const result = await cursor.toArray()
+  res.send(result)
+})
+
+app.post('/delivery' , async (req ,res) => {
+  const rider = req.body;
+  rider.status = 'pending'
+  rider.createdAt = new Date()
+
+  const result = await deliveryCollection.insertOne(rider)
   res.send(result)
 })
 
