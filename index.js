@@ -272,6 +272,38 @@ app.post('/delivery' , async (req ,res) => {
   res.send(result)
 })
 
+app.patch('/delivery/:id' , verifyFBToken , async(req , res) => {
+  const status = req.body.status
+  const id = req.params.id
+  const query = {_id: new ObjectId(id)}
+  const updatedDoc = {
+    $set : {
+      status :status,
+
+    }
+  }
+  const result = await deliveryCollection.updateOne(query , updatedDoc)
+  if(status === 'approved'){
+    const email = req.body.email
+    const userQuery = {email}
+    const updateUser = {
+      $set: {
+        role: 'rider'
+      }
+    }
+    const userResult = await userCollection.updateOne(userQuery , updateUser)
+
+  }
+  res.send(result)
+})
+app.delete('/delivery/:id', verifyFBToken, async (req, res) => {
+  const id = req.params.id;
+  const result = await deliveryCollection.deleteOne({
+    _id: new ObjectId(id),
+  });
+  res.send(result);
+});
+
     await client.db("Premium_Garments").command({ ping: 1 });
     console.log("Pinged your deployment. You successfully connected to MongoDB!");
   } finally {
