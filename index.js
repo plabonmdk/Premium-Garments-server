@@ -291,6 +291,24 @@ app.get("/orders/:id", verifyFBToken, async (req, res) => {
 });
 
 
+// My Orders
+app.get("/my-orders", verifyFBToken, async (req, res) => {
+  const email = req.decoded_email;
+  const orders = await orderCollection
+    .find({ email })
+    .sort({ createdAt: -1 })
+    .toArray();
+  res.send(orders);
+});
+
+// Track Order
+app.get("/track-order/:id", verifyFBToken, async (req, res) => {
+  const { id } = req.params;
+  const order = await orderCollection.findOne({ _id: new ObjectId(id) });
+  res.send(order); // includes tracking array
+});
+
+
 // GET /admin/products
 app.get("/admin/products", verifyFBToken, verifyAdmin, async (req, res) => {
   try {
@@ -333,6 +351,61 @@ app.delete("/admin/products/:id", verifyFBToken, verifyAdmin, async (req, res) =
     res.status(500).send({ message: "Product delete failed" });
   }
 });
+
+// Add Product
+app.post("/products", verifyFBToken, async (req, res) => {
+  try {
+    const product = req.body;
+    const db = client.db("Premium_Garments");
+    const productCollection = db.collection("products");
+
+    // Validate required fields
+    if (!product.title || !product.price || !product.category) {
+      return res.status(400).send({ message: "Missing required fields" });
+    }
+
+    product.createdBy = req.decoded_email;
+    product.showOnHome = product.showOnHome || false;
+    product.createdAt = new Date();
+
+    const result = await productCollection.insertOne(product);
+    res.send(result);
+  } catch (err) {
+    console.error(err);
+    res.status(500).send({ message: "Failed to add product" });
+  }
+});
+
+// Get Products by Manager
+app.get("/manager/products", verifyFBToken, async (req, res) => {
+  const products = await productCollection
+    .find({ createdBy: req.decoded_email })
+    .sort({ createdAt: -1 })
+    .toArray();
+  res.send(products);
+});
+
+// Update Product (Manager)
+app.patch("/products/:id", verifyFBToken, async (req, res) => {
+  const { id } = req.params;
+  const updateData = req.body;
+  const result = await productCollection.updateOne(
+    { _id: new ObjectId(id), createdBy: req.decoded_email },
+    { $set: updateData }
+  );
+  res.send(result);
+});
+
+// Delete Product (Manager)
+app.delete("/products/:id", verifyFBToken, async (req, res) => {
+  const { id } = req.params;
+  const result = await productCollection.deleteOne({
+    _id: new ObjectId(id),
+    createdBy: req.decoded_email,
+  });
+  res.send(result);
+});
+
 
 
 
