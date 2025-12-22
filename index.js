@@ -100,71 +100,6 @@ const verifyAdmin = async (req, res, next) => {
 };
 
 
-// Order api
-
-app.get("/orders", verifyFBToken, async (req, res) => {
-  const email = req.query.email;
-
-  if (req.decoded_email !== email) {
-    return res.status(403).send({ message: "Forbidden" });
-  }
-
-  const result = await orderCollection
-    .find({ email })
-    .sort({ createdAt: -1 })
-    .toArray();
-
-  res.send(result);
-});
-
-
-app.post("/orders", verifyFBToken, async (req, res) => {
-  try {
-    const order = req.body;
-
-    // product find
-    const product = await productCollection.findOne({
-      _id: new ObjectId(order.productId),
-    });
-
-    if (!product) {
-      return res.status(404).send({ message: "Product not found" });
-    }
-
-    // quantity validation
-    if (
-      order.orderQuantity < product.minimumOrder ||
-      order.orderQuantity > product.availableQuantity
-    ) {
-      return res.status(400).send({ message: "Invalid order quantity" });
-    }
-
-    // optional: user email verification (recommended)
-    if (order.email !== req.decoded.email) {
-      return res.status(403).send({ message: "Unauthorized order request" });
-    }
-
-    // save order
-    const result = await orderCollection.insertOne({
-      ...order,
-      status: "pending",
-      createdAt: new Date(),
-    });
-
-    // reduce product stock
-    await productCollection.updateOne(
-      { _id: product._id },
-      { $inc: { availableQuantity: -order.orderQuantity } }
-    );
-
-    res.send(result);
-  } catch (error) {
-    res.status(500).send({ message: "Order creation failed" });
-  }
-});
-
-
-
 
 // products api
 
@@ -213,6 +148,120 @@ app.get("/products/:id", async (req, res) => {
     res.status(500).send({ message: "Server error" });
   }
 });
+
+
+
+// Order api
+
+app.get("/orders", verifyFBToken, async (req, res) => {
+  const email = req.query.email;
+
+  if (req.decoded_email !== email) {
+    return res.status(403).send({ message: "Forbidden" });
+  }
+
+  const result = await orderCollection
+    .find({ email })
+    .sort({ createdAt: -1 })
+    .toArray();
+
+  res.send(result);
+});
+
+
+app.post("/orders", verifyFBToken, async (req, res) => {
+  try {
+    const order = req.body;
+
+    // Product find
+    const product = await productCollection.findOne({
+      _id: new ObjectId(order.productId),
+    });
+
+    if (!product) {
+      return res.status(404).send({ message: "Product not found" });
+    }
+
+    // Quantity validation (field name matches DB)
+    if (
+      order.orderQuantity < product.minimumOrder ||
+      order.orderQuantity > product.quantity // <-- quantity field from DB
+    ) {
+      return res.status(400).send({ message: "Invalid order quantity" });
+    }
+
+    // Optional: verify user email
+    if (order.email !== req.decoded_email) {
+      return res.status(403).send({ message: "Unauthorized order request" });
+    }
+
+    // Save order
+    const result = await orderCollection.insertOne({
+      ...order,
+      status: "pending",
+      createdAt: new Date(),
+    });
+
+    // Reduce product stock
+    await productCollection.updateOne(
+      { _id: product._id },
+      { $inc: { quantity: -order.orderQuantity } } // <-- match DB field
+    );
+
+    res.send(result);
+  } catch (error) {
+    console.error("Order creation failed:", error); // <-- log error
+    res.status(500).send({ message: "Order creation failed" });
+  }
+});
+
+// GET /admin/products
+app.get("/admin/products", verifyFBToken, verifyAdmin, async (req, res) => {
+  try {
+    const products = await productCollection.find().sort({ createdAt: -1 }).toArray();
+    res.send(products);
+  } catch (error) {
+    console.error("Fetch products error:", error);
+    res.status(500).send({ message: "Server error" });
+  }
+});
+
+// PATCH /admin/products/:id
+app.patch("/admin/products/:id", verifyFBToken, verifyAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const updateData = req.body;
+
+    const result = await productCollection.updateOne(
+      { _id: new ObjectId(id) },
+      { $set: updateData }
+    );
+
+    res.send(result);
+  } catch (error) {
+    console.error("Update product error:", error);
+    res.status(500).send({ message: "Product update failed" });
+  }
+});
+
+// DELETE /admin/products/:id
+app.delete("/admin/products/:id", verifyFBToken, verifyAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const result = await productCollection.deleteOne({ _id: new ObjectId(id) });
+
+    res.send(result);
+  } catch (error) {
+    console.error("Delete product error:", error);
+    res.status(500).send({ message: "Product delete failed" });
+  }
+});
+
+
+
+
+
 
 
 
