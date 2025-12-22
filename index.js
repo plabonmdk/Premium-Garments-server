@@ -99,6 +99,26 @@ const verifyAdmin = async (req, res, next) => {
   }
 };
 
+// Get user role
+app.get("/users/:email/role", async (req, res) => {
+  try {
+    const { email } = req.params;
+    const db = client.db("Premium_Garments");
+    const userCollection = db.collection("users");
+
+    const user = await userCollection.findOne({ email });
+
+    if (!user) {
+      return res.status(404).send({ message: "User not found" });
+    }
+
+    res.send({ role: user.role });
+  } catch (err) {
+    console.error(err);
+    res.status(500).send({ message: "Server error" });
+  }
+});
+
 
 
 // products api
@@ -214,6 +234,62 @@ app.post("/orders", verifyFBToken, async (req, res) => {
     res.status(500).send({ message: "Order creation failed" });
   }
 });
+// Pending Orders (Manager)
+app.get("/orders/pending", verifyFBToken, async (req, res) => {
+  const orders = await orderCollection
+    .find({ status: "pending" })
+    .sort({ createdAt: -1 })
+    .toArray();
+  res.send(orders);
+});
+
+// Approve Order
+app.patch("/orders/:id/approve", verifyFBToken, async (req, res) => {
+  const { id } = req.params;
+  const result = await orderCollection.updateOne(
+    { _id: new ObjectId(id) },
+    { $set: { status: "approved", approvedAt: new Date() } }
+  );
+  res.send(result);
+});
+
+// Reject Order
+app.patch("/orders/:id/reject", verifyFBToken, async (req, res) => {
+  const { id } = req.params;
+  const result = await orderCollection.updateOne(
+    { _id: new ObjectId(id) },
+    { $set: { status: "rejected" } }
+  );
+  res.send(result);
+});
+
+// Approved Orders
+app.get("/orders/approved", verifyFBToken, async (req, res) => {
+  const orders = await orderCollection
+    .find({ status: "approved" })
+    .sort({ approvedAt: -1 })
+    .toArray();
+  res.send(orders);
+});
+
+// Add Tracking
+app.post("/orders/:id/tracking", verifyFBToken, async (req, res) => {
+  const { id } = req.params;
+  const trackingData = req.body; // { location, note, status, date }
+  const result = await orderCollection.updateOne(
+    { _id: new ObjectId(id) },
+    { $push: { tracking: trackingData } }
+  );
+  res.send(result);
+});
+
+// Get single order with tracking
+app.get("/orders/:id", verifyFBToken, async (req, res) => {
+  const { id } = req.params;
+  const order = await orderCollection.findOne({ _id: new ObjectId(id) });
+  res.send(order);
+});
+
 
 // GET /admin/products
 app.get("/admin/products", verifyFBToken, verifyAdmin, async (req, res) => {
@@ -221,8 +297,8 @@ app.get("/admin/products", verifyFBToken, verifyAdmin, async (req, res) => {
     const products = await productCollection.find().sort({ createdAt: -1 }).toArray();
     res.send(products);
   } catch (error) {
-    console.error("Fetch products error:", error);
-    res.status(500).send({ message: "Server error" });
+    // console.error("Fetch products error:", error);
+    res.status(500).send({ message: "Failed to fetch products" });
   }
 });
 
