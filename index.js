@@ -21,7 +21,7 @@ admin.initializeApp({
 app.use(express.json());
 app.use(
   cors({
-    origin: [process.env.SITE_DOMAIN],
+    origin: [process.env.SITE_DOMAIN,'https://garments-order.web.app'],
     credentials: true,
   })
 );
@@ -46,7 +46,8 @@ const verifyFBToken = async (req, res, next) => {
   }
 };
 // ---------------- MONGODB ----------------
-const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.sq5rgml.mongodb.net/?appName=Cluster0`;
+const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.xalxakh.mongodb.net/?appName=Cluster0`;
+
 const client = new MongoClient(uri, {
   serverApi: {
     version: ServerApiVersion.v1,
@@ -57,14 +58,15 @@ const client = new MongoClient(uri, {
 
 async function run() {
   try {
-    // await client.connect();
+    await client.connect();
+
     const db = client.db("Premium_Garments");
 
     const productCollection = db.collection("products");
     const userCollection = db.collection("users");
     const orderCollection = db.collection("orders");
 
-    // console.log("MongoDB Connected");
+    console.log("MongoDB Connected");
 
     // ---------------- ROLE MIDDLEWARE ----------------
    const verifyManager = async (req, res, next) => {
